@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill -f serve.py)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('accepted:',d.get\\('accepted'\\),'category:',d.get\\('category'\\)\\); [print\\(' ',l,'verified_ok=',v.get\\('verified_ok'\\),'iters=',v.get\\('iterations'\\)\\) for l,v in \\(d.get\\('languages'\\) or {}\\).items\\(\\)]; print\\('error:',d.get\\('error'\\)\\)\")",
+      "Bash(.venv/bin/python -c \"from mo_validator.agent import Agent, DEFAULT_MODEL, DEFAULT_BASE_URL; print\\('import OK'\\); print\\('model:', DEFAULT_MODEL\\); print\\('base_url:', DEFAULT_BASE_URL\\)\")",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/python serve.py)",
+      "Bash(curl -s http://127.0.0.1:5000/api/health)",
+      "Bash(curl -s -o /dev/null -w \"/ -> %{http_code}\\\\n\" http://127.0.0.1:5000/)",
+      "Bash(~/.local/jdk/jdk-21.0.11+10/bin/javac -version)",
+      "Bash(~/.local/jdk/jdk-21.0.11+10/bin/java -version)",
+      "Bash(timeout 540 .venv/bin/python -c ' *)",
+      "Bash(timeout 580 .venv/bin/python -c ' *)",
+      "Bash(cd \"/home/da014/Desktop/Multiple outputs Automation\" && sed -n '/=== SUMMARY ===/,$p' \"/home/da014/.claude/projects/-home-da014-Desktop-Multiple-outputs-Automation/516bcc71-824d-4b0b-8221-7acb8af4c55d/tool-results/bqjs5r126.txt\")",
+      "Bash(timeout 300 .venv/bin/python -c ' *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5000/)",
+      "Bash(.venv/bin/python serve.py --host 127.0.0.1 --port 5000)",
+      "Bash(python -m py_compile mo_validator/prompts.py mo_validator/mlpipeline.py mo_validator/executor.py mo_validator/runners.py)",
+      "Bash(timeout 560 .venv/bin/python -c ' *)",
+      "Bash(node --check webapp/static/app.js)",
+      "Bash(.venv/bin/python -m py_compile mo_validator/mlpipeline.py mo_validator/prompts.py)"
+    ],
+    "additionalDirectories": [
+      "/home/da014/.claude/projects/-home-da014-Desktop-Multiple-outputs-Automation/516bcc71-824d-4b0b-8221-7acb8af4c55d/tool-results"
+    ]
+  }
+}

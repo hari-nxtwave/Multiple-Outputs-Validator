@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Multiple-Outputs Validator Generator</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Multiple-Outputs Validator Generator</h1>
+    <p class="sub">Paste a multiple-outputs coding question. An agent classifies it,
+      generates a validator-embedded driver in <b>Python, JavaScript, C++ and Java</b>,
+      then proves it by compiling and running test cases — corner and edge cases included —
+      checking that every valid user output is accepted and every invalid one is rejected.</p>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main>
+    <section class="panel">
+      <label class="field-label" for="desc">Problem description
+        <span class="hint">(state whether outputs may be returned "in any order" or "any valid answer")</span>
+      </label>
+      <textarea id="desc" rows="12" placeholder="e.g. Given distinct positive integers, return the largest subset where every pair is divisible. If several subsets of the maximum size exist, return any one of them..."></textarea>
+
+      <div class="examples">
+        <span>Examples:</span>
+        <button class="link" data-ex="lds">Largest Divisible Subset (any valid)</button>
+        <button class="link" data-ex="ga">Group Anagrams (any order)</button>
+        <button class="link" data-ex="sum">Array Sum (single — rejected)</button>
+      </div>
+
+      <div class="controls">
+        <span class="langs-label">Base language</span>
+        <div id="langs" class="langs"></div>
+        <label class="iters">Max iterations
+          <select id="iters">
+            <option selected>2</option><option>3</option><option>4</option><option>5</option>
+          </select>
+        </label>
+        <button id="run" class="primary">Generate &amp; Verify</button>
+      </div>
+    </section>
+
+    <section id="status" class="status hidden">
+      <div class="spinner"></div>
+      <div><b id="status-text">Working…</b><div class="muted">This runs several model calls and compiles/runs code; it can take a minute or two.</div></div>
+    </section>
+
+    <section id="log-wrap" class="panel hidden">
+      <h3>Run log</h3>
+      <pre id="log" class="log"></pre>
+    </section>
+
+    <section id="results" class="hidden"></section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
