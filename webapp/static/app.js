@@ -115,7 +115,7 @@ function renderLang(lr) {
       `${esc(lr.message)}</p><p class="muted">This is an API / network / budget ` +
       `error, not a validator-quality issue — check the run log and retry.</p>`;
   if (lr.translated) {
-    let html = `<p class="notes"><b>Translated from the reviewed Java validator.</b> ` +
+    let html = `<p class="notes"><b>${esc(lr.message || "Translated from the reviewed base validator.")}</b> ` +
       `Not executed by design — it inherits the base validator's verified &amp; reviewed logic. ` +
       `<b>Strategy:</b> ${esc(lr.strategy || "?")}</p>`;
     if (lr.validation_notes) html += `<p class="muted">${esc(lr.validation_notes)}</p>`;

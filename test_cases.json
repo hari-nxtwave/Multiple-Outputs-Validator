@@ -1,59 +1,59 @@
 {
-  "title": "Hamiltonian Path with Ordered Checkpoint Visits",
-  "category": "ANY_VALID",
-  "stdin_format": "\nFirst line: m n k (three space-separated integers)\nNext m lines: each line contains n space-separated integers representing the grid row\n",
-  "output_format": "\nIf a valid path exists:\n  Line 1: m*n (the number of cells in the path)\n  Next m*n lines: each line contains two space-separated integers [xi, yi] representing coordinates\nIf no valid path exists:\n  Output: empty (or a single line with \"empty\" or similar indicator)\n",
+  "title": "Hamiltonian Path with k-Ordered Waypoints",
+  "category": "ANY_ORDER",
+  "stdin_format": "First line: three integers m, n, k (dimensions and number of ordered waypoints)\nNext m lines: n space-separated integers representing the grid, where values are 0 or 1..k, and exactly k cells contain 1..k each.",
+  "output_format": "If a valid path exists: m*n lines, each containing two space-separated integers x y (0-indexed row and column).\nIf no valid path exists: output a single line containing \"EMPTY\" or empty output (one blank line).",
   "count": 10,
   "test_cases": [
     {
-      "name": "example_from_problem",
+      "name": "example_basic",
       "stdin": "2 3 2\n0 0 0\n0 1 2",
       "kind": "normal"
     },
     {
-      "name": "single_cell_no_checkpoints",
+      "name": "single_cell_k0",
       "stdin": "1 1 0\n0",
       "kind": "edge"
     },
     {
-      "name": "single_cell_with_checkpoint",
+      "name": "single_cell_k1",
       "stdin": "1 1 1\n1",
       "kind": "edge"
     },
     {
-      "name": "impossible_checkpoints_order",
-      "stdin": "1 3 2\n2 0 1",
+      "name": "impossible_nonexistent_labels",
+      "stdin": "2 2 2\n0 0\n1 0",
       "kind": "edge"
     },
     {
-      "name": "checkpoints_adjacent",
-      "stdin": "1 4 3\n1 2 3 0",
-      "kind": "edge"
-    },
-    {
-      "name": "2x2_grid_k1",
+      "name": "2x2_k1_corner",
       "stdin": "2 2 1\n1 0\n0 0",
       "kind": "normal"
     },
     {
-      "name": "3x3_grid_k2_separated",
-      "stdin": "3 3 2\n1 0 0\n0 0 0\n0 0 2",
+      "name": "3x3_k3_ordered",
+      "stdin": "3 3 3\n1 0 2\n0 0 0\n0 0 3",
       "kind": "normal"
     },
     {
-      "name": "all_checkpoints_requires_backtrack",
-      "stdin": "2 2 4\n1 2\n3 4",
+      "name": "linear_path_1d",
+      "stdin": "1 5 2\n1 0 2 0 0",
       "kind": "edge"
     },
     {
-      "name": "large_grid_few_checkpoints",
-      "stdin": "10 10 3\n0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0\n0 0 0 1 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 2 0 0\n0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 3\n0 0 0 0 0 0 0 0 0 0",
+      "name": "disconnected_impossible",
+      "stdin": "2 3 2\n0 0 0\n0 0 0",
+      "kind": "edge"
+    },
+    {
+      "name": "large_grid_5x5",
+      "stdin": "5 5 5\n1 0 0 0 0\n0 0 0 0 0\n0 0 0 0 0\n0 0 0 0 0\n0 0 0 0 2\n0 0 0 0 3\n0 0 0 0 4\n0 0 0 0 5\n0 0 0 0 0",
       "kind": "long"
     },
     {
-      "name": "stress_15x15_k5",
-      "stdin": "15 15 5\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 1 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 2 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 3 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 4 0\n0 0 0 0 0 0 0 0 0 0 0 0 0 0 5",
-      "kind": "stress"
+      "name": "impossible_labels_wrong_order",
+      "stdin": "2 3 2\n2 0 0\n0 1 0",
+      "kind": "edge"
     }
   ]
 }

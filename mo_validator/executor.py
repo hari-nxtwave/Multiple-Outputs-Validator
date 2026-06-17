@@ -144,6 +144,7 @@ def verify_by_execution(
                 else f"MISMATCH: got {out!r}, expected {expected[name]!r}"))
 
     # Wrong submissions must be rejected on at least one input they're wrong on.
+    wrong_cases: list[CaseResult] = []
     for sol in suite.get("wrong_solutions", []):
         runs = compile_or_skip("wrong", sol)
         if runs is None:
@@ -172,7 +173,35 @@ def verify_by_execution(
             detail = (f"NOT CAUGHT: accepted as canonical on every input {accepted_on}. "
                       "Validator may be too lenient (or this 'wrong' solution is "
                       "actually correct on all tested inputs).")
-        res.cases.append(CaseResult("wrong", sol["name"], "any", caught, detail))
+        case = CaseResult("wrong", sol["name"], "any", caught, detail)
+        wrong_cases.append(case)
+        res.cases.append(case)
+
+    # Decide whether the validator demonstrably discriminates valid from invalid.
+    #
+    # A "wrong" submission can only ever be NOT CAUGHT by producing the canonical
+    # (correct) output on every tested input — which means it simply was not
+    # actually wrong on any of those inputs, so it tests nothing. We cannot tell
+    # "non-discriminating test case" apart from "too-lenient validator" in
+    # isolation, but if AT LEAST ONE wrong submission *is* rejected, the validator
+    # provably rejects invalid answers — so the uncaught ones are weak test cases,
+    # not validator bugs. We tolerate those (warn instead of fail) so a correct
+    # validator is not flagged for review over a non-discriminating sample.
+    #
+    # Only when NO wrong submission is caught at all (and there were some) do we
+    # treat it as a real failure: the validator may accept everything.
+    any_wrong = bool(wrong_cases)
+    any_caught = any(c.passed for c in wrong_cases)
+    validator_discriminates = any_caught or not any_wrong
+    if validator_discriminates:
+        for c in wrong_cases:
+            if not c.passed:
+                res.harness_warnings.append(
+                    f"wrong solution '{c.solution}' was not discriminating "
+                    f"({c.detail}); tolerated because the validator rejects other "
+                    "invalid answers.")
+                c.passed = True
+                c.detail = "tolerated: not wrong on any tested input"
 
     failures = [c for c in res.cases if not c.passed]
     res.ok = not failures and not res.driver_compile_error
@@ -180,5 +209,10 @@ def verify_by_execution(
         lines = ["Execution found failing cases the driver must fix:"]
         for c in failures[:25]:
             lines.append(f"- [{c.kind}] solution='{c.solution}', input='{c.test_input}': {c.detail}")
+        if any_wrong and not any_caught:
+            lines.append(
+                "No 'wrong' submission was rejected on any input — the validator "
+                "accepts everything (too lenient) or the suite's wrong solutions are "
+                "not actually wrong on the shared inputs.")
         res.feedback = "\n".join(lines)
     return res

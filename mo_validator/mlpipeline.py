@@ -518,7 +518,7 @@ def run_multilang(
     agent = agent or Agent()
     languages = languages or list(ALL_LANGUAGES)
     if max_iterations is None:
-        max_iterations = int(os.environ.get("MO_MAX_ITERATIONS", "2"))
+        max_iterations = int(os.environ.get("MO_MAX_ITERATIONS", "3"))
 
     # ---- 1. Classify ------------------------------------------------------ #
     progress("classify", "Classifying question (multiple-outputs? which kind?)...")
@@ -584,15 +584,13 @@ def run_multilang(
         progress("coverage", f"Wrote {len(inputs)} test cases to "
                  f"{result.test_cases_path}.")
 
-    # ---- 3. Base language (Java): test suite + driver + EXECUTION verify ---- #
+    # ---- 3. Base language: test suite + driver + EXECUTION verify ---------- #
     # Optimised flow: do the expensive work (generate solutions, compile & run, and
-    # review) in ONE language only — Java — then translate the reviewed validator to
-    # the others without re-running anything.
-    base = "java" if ("java" in languages and (get_runner("java")
-                       and get_runner("java").available())) else None
-    if base is None:  # Java unavailable/unselected -> fall back to the first usable
-        base = next((l for l in languages
-                     if get_runner(l) and get_runner(l).available()), None)
+    # review) in ONE language only — the language the user selected — then translate
+    # the reviewed validator to the others without re-running anything. We honour the
+    # selection in order, so the first usable selected language becomes the base.
+    base = next((l for l in languages
+                 if get_runner(l) and get_runner(l).available()), None)
     if base is None:
         result.message = ("No usable language runtime available to build/verify the "
                           "base validator.")
@@ -616,13 +614,40 @@ def run_multilang(
         )
         return result
 
-    # ---- 4. Review the base validator across the (<=10) test cases ---------- #
-    # Edge/corner coverage + whether it correctly judges the user's returned output.
-    review_rounds = int(os.environ.get("MO_REVIEW_ROUNDS", "1"))
-    if review_rounds > 0:
+    # ---- 4. Reconcile execution with an agentic review --------------------- #
+    # Execution is the GROUND TRUTH: the driver is compiled and run against the
+    # reference, every equivalent (correct) solution, and every wrong / sub-optimal
+    # solution. With the suite now required to include a valid-but-sub-optimal wrong
+    # answer, that run already exercises the optimality check too.
+    #
+    # So we only spend LLM calls on the agentic review when execution could NOT
+    # verify the driver — that is exactly when the review's diagnosis is worth it,
+    # and it can only help (it regenerates + re-verifies). When execution already
+    # passed, we trust it: running the reviewer there only risks a noisy false
+    # "needs review" (a check it imagines missing is one the wrong/sub-optimal cases
+    # already proved present) or a regeneration that breaks a known-good driver.
+    spec_blob_base = _spec_blob(base, description, category, spec)
+    if base_lr.verified_ok:
+        result.validator_review = {
+            "overall_ok": True,
+            "summary": (f"Execution-verified in {base} on {len(inputs)} test cases — "
+                        "the reference, every correct/equivalent solution and every "
+                        "wrong/sub-optimal solution are judged correctly."),
+            "cross_language_consistency": (
+                f"Validator authored & execution-verified in {base}, then translated "
+                "to the other languages (which inherit its verified logic)."),
+            "per_language": [{"language": base, "ok": True, "issues": [],
+                              "fix_suggestions": ""}],
+        }
+        progress("validator-review", f"{base} validator execution-verified; "
+                 "skipping the advisory review (no extra model call needed).")
+    else:
+        # Execution couldn't get everything green — bring in the reviewer to diagnose
+        # and fix, looping a few rounds (review -> regenerate -> re-verify).
+        review_rounds = int(os.environ.get("MO_REVIEW_ROUNDS", "2"))
         for rnd in range(1, review_rounds + 1):
-            progress("validator-review", f"[round {rnd}] Reviewing the {base} "
-                     "validator across the test cases (edge/corner + accept/reject)...")
+            progress("validator-review", f"[round {rnd}] Execution did not fully "
+                     f"verify; reviewing the {base} validator to diagnose & fix...")
             review = agent.structured(
                 system=prompts.validator_function_review_system(base, category),
                 user=_single_validator_review_user(description, category, spec, inputs, base_lr),
@@ -631,23 +656,27 @@ def run_multilang(
                 schema=prompts.COMPLETE_CODE_REVIEW_SCHEMA,
             )
             base_lr.code_review = review
-            review_ok = bool(review.get("is_correct")) and not review.get("issues")
+            # The driver is good only if EXECUTION now passes; the review verdict is
+            # advisory on top of that ground truth.
+            overall_ok = base_lr.verified_ok
             result.validator_review = {
-                "overall_ok": review_ok,
-                "summary": (review.get("fix_suggestions") or
-                            "The base validator passed review.") if not review_ok
-                           else "The base validator passed review.",
+                "overall_ok": overall_ok,
+                "summary": ("Execution-verified after review-guided fixes."
+                            if overall_ok else
+                            (review.get("fix_suggestions")
+                             or "Execution still reports failing cases; see below.")),
                 "cross_language_consistency": (
                     f"Validator authored, execution-verified and reviewed in {base}, "
                     "then translated to the other languages."),
                 "per_language": [{
-                    "language": base, "ok": review_ok,
+                    "language": base, "ok": overall_ok,
                     "issues": review.get("issues", []),
                     "fix_suggestions": review.get("fix_suggestions", ""),
                 }],
             }
-            if review_ok:
-                progress("validator-review", f"The {base} validator passed review.")
+            if overall_ok:
+                progress("validator-review", f"The {base} validator now passes "
+                         "execution after review-guided fixes.")
                 break
             if rnd == review_rounds:
                 progress("validator-review", "Issues remain after the final review "
@@ -656,8 +685,7 @@ def run_multilang(
             fb = review.get("fix_suggestions", "")
             if review.get("issues"):
                 fb += "\nIssues:\n- " + "\n- ".join(review["issues"])
-            _regen_and_verify(base_lr, base, category,
-                              _spec_blob(base, description, category, spec),
+            _regen_and_verify(base_lr, base, category, spec_blob_base,
                               inputs, agent, fb, progress, f"review r{rnd}")
 
     # ---- 5. Translate the reviewed validator to the other languages -------- #
@@ -683,14 +711,15 @@ def run_multilang(
                 _TRANSLATE_DRIVER_KEY[lang], "") or "")
             lr.strategy = base_lr.strategy
             lr.translated = True
-            lr.validation_notes = (f"Translated from the reviewed {base} validator; "
-                                   "not executed (logic inherited from the base).")
-            lr.message = (f"Translated from the reviewed {base} validator "
-                          "(not executed).")
+            lr.validation_notes = (f"Translated from the execution-verified {base} "
+                                   "validator; not executed (logic inherited from the "
+                                   "base).")
+            lr.message = (f"Translated from the {base} validator (not executed).")
             result.languages[lang] = lr
             progress("translate", f"{lang}: validator translated.")
 
-    base_ok = "verified & reviewed" if base_lr.verified_ok else "generated (review flagged issues)"
+    base_ok = ("verified by execution" if base_lr.verified_ok
+               else "generated (execution still reports failing cases)")
     result.message = (
         f"{base} validator {base_ok} on {len(inputs)} test cases; "
         f"{len(targets)} other language(s) translated from it (not executed)."

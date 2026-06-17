@@ -665,6 +665,16 @@ RULES:
     a CANONICAL answer when valid (so it matches the single stored expected
     output) or the user's raw answer when invalid (so it mismatches). Never crash
     on a malformed/empty user answer — treat it as invalid.
+    CRITICAL ANY_VALID PITFALL — do NOT reject a valid answer just because it
+    differs from the specific canonical answer you reconstructed. There are
+    MULTIPLE correct answers by definition; an answer is valid iff it satisfies
+    every structural constraint AND is optimal (e.g. its size/cost equals the
+    optimum you computed) — NOT iff its elements equal your canonical answer's
+    elements. Validate by PROPERTIES (membership, pairwise/structural rules,
+    optimal size/cost), never by element-equality against your canonical. When the
+    user's answer is valid, print YOUR canonical answer (identical for all valid
+    answers, so the single stored expected output matches). Two different optimal
+    answers must BOTH be accepted.
   - Output deterministic, in the exact output_format. Return the COMPLETE program.
 If given reviewer feedback, fix exactly those issues and return the full file."""
     )
@@ -777,6 +787,14 @@ REQUIREMENTS:
     verification. Submit only approaches efficient enough for the given inputs.
   - Provide >= 2 WRONG submissions with DISTINCT failure modes (wrong size, a
     violated constraint, an element not from the input, sub-optimal, empty/garbage).
+  - REQUIRED for any OPTIMISATION problem (largest / smallest / maximum / minimum /
+    longest / best — i.e. the answer must be optimal): include AT LEAST ONE wrong
+    submission that returns a STRUCTURALLY VALID but SUB-OPTIMAL answer (every
+    constraint satisfied, but smaller/worse than the optimum — e.g. returns a valid
+    subset that is not the largest). This is the only submission that forces the
+    validator to check OPTIMALITY rather than just structural validity, so a
+    validator that forgets the size/optimality check is caught by execution. Make
+    sure it is sub-optimal on at least one of the SPECIFIC shared inputs given.
 
 CRITICAL — every WRONG submission MUST actually be caught on the inputs you have:
   - A wrong submission is only useful if, on AT LEAST ONE of the SPECIFIC shared

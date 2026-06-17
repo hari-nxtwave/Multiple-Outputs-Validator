@@ -62,7 +62,7 @@ def process():
     if not languages:
         return jsonify({"error": "No valid languages selected."}), 400
 
-    max_iterations = int(data.get("max_iterations") or 2)
+    max_iterations = int(data.get("max_iterations") or 3)
 
     log: list[dict[str, str]] = []
 

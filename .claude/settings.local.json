@@ -20,7 +20,22 @@
       "Bash(python -m py_compile mo_validator/prompts.py mo_validator/mlpipeline.py mo_validator/executor.py mo_validator/runners.py)",
       "Bash(timeout 560 .venv/bin/python -c ' *)",
       "Bash(node --check webapp/static/app.js)",
-      "Bash(.venv/bin/python -m py_compile mo_validator/mlpipeline.py mo_validator/prompts.py)"
+      "Bash(.venv/bin/python -m py_compile mo_validator/mlpipeline.py mo_validator/prompts.py)",
+      "Bash(ls .venv/bin/python)",
+      "Bash(.venv/bin/python -c \"import flask; print\\('flask', flask.__version__\\)\")",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:5000/)",
+      "Bash(.venv/bin/python -c \"import mo_validator.executor, mo_validator.mlpipeline, webapp.server; print\\('imports OK'\\)\")",
+      "Bash(curl -s -o /dev/null -w \"GET / -> HTTP %{http_code}\\\\n\" http://127.0.0.1:5000/)",
+      "Bash(curl -s -X POST http://127.0.0.1:5000/api/process -H \"Content-Type: application/json\" -d '{\"description\":\"Given a set of distinct positive integers, return the largest subset such that every pair \\(a,b\\) satisfies a % b == 0 or b % a == 0. If multiple subsets of the maximum size exist, return any one. Input: first line n, then n integers. Output: the subset elements separated by spaces.\",\"languages\":[\"java\"],\"max_iterations\":3}')",
+      "Bash(echo \"exit=$?\")",
+      "Bash(pkill -f \"serve.py\")",
+      "Bash(.venv/bin/python -c \"import mo_validator.mlpipeline, mo_validator.prompts, mo_validator.executor; print\\('imports OK'\\)\")",
+      "Bash(.venv/bin/python -c \"import mo_validator.mlpipeline, mo_validator.prompts, mo_validator.executor, webapp.server; print\\('imports OK'\\)\")",
+      "Bash(.venv/bin/python -c \"import webapp.server; print\\('imports OK'\\)\")",
+      "Bash(nohup .venv/bin/python serve.py --host 127.0.0.1 --port 5000)",
+      "Bash(curl -s -o /dev/null -w \"server HTTP %{http_code}\\\\n\" http://127.0.0.1:5000/)",
+      "Bash(sleep 1; curl -s -o /dev/null -w \"server HTTP %{http_code}\\\\n\" http://127.0.0.1:5000/ 2>&1 || echo \"not up\"; tail -3 /tmp/mo_serve.log 2>/dev/null)",
+      "Read(//tmp/**)"
     ],
     "additionalDirectories": [
       "/home/da014/.claude/projects/-home-da014-Desktop-Multiple-outputs-Automation/516bcc71-824d-4b0b-8221-7acb8af4c55d/tool-results"
