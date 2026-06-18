@@ -540,43 +540,33 @@ def run_multilang(
     progress("classify", f"{category} ({classification['confidence']}): "
              + classification["short_summary"])
 
-    # ---- 2. Spec + coverage (one call) ------------------------------------ #
-    # The spec author now also self-reviews coverage, so the dedicated coverage
-    # critic call is folded in here — one fewer LLM round-trip per run.
-    progress("spec", "Designing the shared I/O contract and an exhaustive set of "
-             "test inputs (corner/edge cases included)...")
+    # ---- 2. Spec + 10 test inputs (one call) ------------------------------ #
+    # The spec author defines the shared contract and the 10 stdin test inputs in a
+    # single call (no separate coverage-critic pass / coverage write-up).
+    progress("spec", "Designing the shared I/O contract and 10 test inputs "
+             "(corner/edge cases included)...")
     spec = agent.structured(
         system=prompts.SPEC_SYSTEM,
         user=f"## Problem description\n{description}\n\nCategory: {category}.\n"
-        "Author the shared contract, per-language signatures, and a complete set "
-        "of test inputs, then self-review their coverage.",
+        "Author the shared contract, per-language signatures, and exactly 10 test "
+        "inputs covering all four kinds (normal/edge/long/stress).",
         tool_name="emit_spec",
-        tool_description="Return the I/O contract, signatures, test inputs, and a "
-        "coverage self-review.",
+        tool_description="Return the I/O contract, signatures, and 10 test inputs.",
         schema=prompts.SPEC_SCHEMA,
     )
     inputs = [{"name": t["name"], "stdin": t["stdin"],
                "kind": t.get("kind", "normal")} for t in spec["test_inputs"]]
-    coverage = {
-        "reasoning": spec.get("reasoning", ""),
-        "assessment": spec.get("coverage_assessment", ""),
-        "coverage_complete": bool(spec.get("coverage_complete", False)),
-        "missing_inputs": [],
-    }
-    progress("spec", f"Contract ready; {len(inputs)} test inputs. "
-             + spec.get("coverage_assessment", ""))
 
-    # Cap the shared test cases to ~10. The base language compiles+runs every
-    # solution against every case, so a tight bound keeps the one executed run fast
-    # (the other languages are translated, never executed).
+    # Run exactly 10 test cases against the base language (trim if the spec emitted
+    # more). The base language compiles+runs every solution against every case, so a
+    # tight bound keeps the one executed run fast (the others are translated).
     verify_cases = int(os.environ.get("MO_VERIFY_CASES", "10"))
     if len(inputs) > verify_cases:
-        progress("coverage", f"Capping {len(inputs)} test cases to {verify_cases}.")
         inputs = inputs[:verify_cases]
-    progress("coverage", f"{coverage['assessment']} ({len(inputs)} test cases).")
+    progress("spec", f"Contract ready; {len(inputs)} test inputs prepared.")
 
     result = MLResult(accepted=True, category=category, classification=classification,
-                      spec=spec, inputs=inputs, coverage=coverage)
+                      spec=spec, inputs=inputs, coverage=None)
 
     # Persist the shared test cases to test_cases.json for inspection / re-running.
     result.test_cases_path = _write_test_cases(spec, category, inputs)

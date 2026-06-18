@@ -28,28 +28,50 @@ A "multiple-outputs question" is one where a correct submission can legitimately
 produce more than one output for the same input. There are two distinct kinds:
 
   (A) RETURN IN ANY ORDER ("any order"):
-      The set / multiset of answer elements is uniquely determined, but their
-      ORDER is unspecified. Example: Group Anagrams — the groups, and the words
-      inside each group, are fixed, but they may be printed in any order. These
-      are resolved by NORMALISING the output: deterministically sort every level
-      of the structure in `main` before printing, so one stored expected output
-      (also normalised) always matches a correct submission.
+      The set / multiset / collection of answer elements is uniquely determined,
+      but their ORDER is unspecified. Example: Group Anagrams — the groups, and the
+      words inside each group, are fixed, but they may be printed in any order.
+      These are resolved by NORMALISING the output: deterministically sort the
+      order-free levels of the structure in `main` before printing, so one stored
+      expected output (also normalised) always matches a correct submission.
+
+      IMPORTANT — "return ALL ..." is almost always kind (A), NOT kind (B). When a
+      problem says return ALL solutions / ALL shortest paths / ALL valid sequences
+      / EVERY answer, the COMPLETE collection is uniquely determined: any correct
+      submission returns the SAME collection, just possibly in a different order.
+      So it is resolved by SORTING the collection, not by a validator. Example:
+      Word Ladder II (return all shortest transformation sequences) — the set of
+      shortest sequences is fixed; only the order in which they are listed varies,
+      so you sort that outer list. Each individual sequence is itself an ORDERED
+      path and its internal order MUST be preserved — only sort the dimensions the
+      problem leaves unordered.
 
   (B) RETURN ANY VALID ANSWER ("any valid"):
-      Genuinely different outputs are all correct. Example: Largest Divisible
-      Subset — many different subsets of the maximum length can be valid, as long
-      as every pair is divisible and all elements come from the input. Sorting
-      cannot fix this, because the elements themselves differ between valid
-      answers. These are resolved by writing a VALIDATOR inside `main`: read what
-      the user's `Solution` returned, check it satisfies ALL of the problem's
-      constraints (including optimality, e.g. "largest"), and then deterministically
-      emit a canonical answer when valid (so it matches the stored expected output)
-      or emit something that will NOT match when invalid.
+      The problem asks for ANY ONE (or just SOME) of several answers whose CONTENT
+      genuinely differs between correct submissions. Example: Largest Divisible
+      Subset — return ANY ONE largest subset; different correct submissions return
+      different element sets. Sorting cannot fix this, because the elements
+      themselves differ between valid answers. These are resolved by writing a
+      VALIDATOR inside `main`: read what the user's `Solution` returned, check it
+      satisfies ALL of the problem's constraints (including optimality, e.g.
+      "largest"), and then deterministically emit a canonical answer when valid (so
+      it matches the stored expected output) or emit something that will NOT match
+      when invalid.
 
   (C) SINGLE OUTPUT:
       The answer is unique (or the order is fully determined by the problem). The
       autograder already works. This system MUST NOT modify these — it only
       handles kinds (A) and (B).
+
+DECISION RULE — "return ALL" vs "return ANY ONE":
+  - "return ALL / EVERY ..." (the complete set of answers) -> the collection is
+    fixed -> kind (A), ANY_ORDER, resolve by SORTING. PREFER THIS.
+  - "return ANY ONE / ANY VALID / SOME ..." (pick one of many) -> content differs
+    -> kind (B), ANY_VALID, resolve by a VALIDATOR.
+  Only choose (B) when sorting genuinely cannot canonicalise the output because the
+  answer CONTENT itself differs between correct submissions. If sorting works,
+  ALWAYS prefer (A) — it needs no recomputation, so it is simpler, faster, and
+  cannot recurse or stack-overflow.
 """
 
 # --------------------------------------------------------------------------- #
@@ -136,6 +158,41 @@ public class Main {
             return 0;
         });
         for (List<String> group : lists) System.out.println(String.join(" ", group));
+    }
+}
+```
+
+--- "RETURN ALL ..." variant: a list of ORDERED sequences (e.g. Word Ladder II) ---
+When the answer is a list of sequences (return ALL shortest transformation
+sequences / all paths), the set of sequences is fixed and only the OUTER list
+order varies. Sort ONLY the outer list; each sequence is an ordered path, so keep
+its internal order. Do NOT write a validator and do NOT recompute the paths — just
+sort what the user returned (no recursion, no stack overflow):
+
+```java
+import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        String startWord = sc.next(), targetWord = sc.next();
+        int n = sc.nextInt();
+        List<String> list = new ArrayList<>();
+        for (int i = 0; i < n; i++) list.add(sc.next());
+        Solution sol = new Solution();
+        List<List<String>> res = sol.findShortestTransformationPaths(startWord, targetWord, list);
+        if (res.size() == 0) { System.out.println("[]"); return; }
+        res.sort((a, b) -> {                 // sort the OUTER list only
+            for (int i = 0; i < Math.min(a.size(), b.size()); i++) {
+                int cmp = a.get(i).compareTo(b.get(i));
+                if (cmp != 0) return cmp;
+            }
+            return Integer.compare(a.size(), b.size());
+        });
+        for (List<String> ans : res) {        // each path keeps its own order
+            for (String s : ans) System.out.print(s + " ");
+            System.out.println();
+        }
     }
 }
 ```
@@ -502,10 +559,24 @@ LANG_CONTRACT = {
 ML_CLASSIFIER_SYSTEM = _BACKGROUND + """
 
 YOUR ROLE: classifier. You are given only the PROBLEM DESCRIPTION (no driver
-code). Decide whether it is a multiple-outputs question and, if so, whether it is
-(A) ANY_ORDER or (B) ANY_VALID, using the element-vs-order test: across two
-correct submissions, can the answer ELEMENTS differ (ANY_VALID) or only their
-ORDER (ANY_ORDER)? If the answer is unique -> SINGLE (the system will stop)."""
+code). Read it CAREFULLY and decide whether it is a multiple-outputs question and,
+if so, whether it is (A) ANY_ORDER or (B) ANY_VALID, using the element-vs-order
+test: across two correct submissions, can the answer ELEMENTS / CONTENT differ
+(ANY_VALID) or only their ORDER (ANY_ORDER)? If the answer is unique -> SINGLE (the
+system will stop).
+
+Apply the "return ALL" vs "return ANY ONE" decision rule:
+  - If the problem asks to return ALL / EVERY answer (all solutions, all shortest
+    paths, all valid sequences), the COMPLETE collection is uniquely determined —
+    two correct submissions return the SAME collection in a possibly different
+    order -> ANY_ORDER (resolved by sorting). This is the common case; prefer it.
+    Worked example: Word Ladder II — "return all the shortest transformation
+    sequences" -> ANY_ORDER. The set of shortest sequences is fixed; only the order
+    of the list varies (each sequence's own order is fixed). It is NOT ANY_VALID.
+  - If the problem asks to return ANY ONE / ANY VALID / SOME answer where the
+    chosen CONTENT genuinely differs between correct submissions (e.g. "return any
+    one largest subset") -> ANY_VALID.
+Only pick ANY_VALID when sorting genuinely cannot canonicalise the output."""
 
 # --------------------------------------------------------------------------- #
 #  Spec: shared I/O contract + per-language signatures + shared test inputs
@@ -545,10 +616,9 @@ Produce:
     several edge, at least one long, at least one stress). Inputs must be
     language-independent stdin strings.
 
-Before finishing, self-review your inputs for gaps and add any missing case.
-Report that review in `coverage_assessment` and set `coverage_complete` true only
-if you are confident the set exercises every distinct behaviour AND includes all
-four kinds (normal/edge/long/stress)."""
+Before finishing, silently double-check that the 10 inputs cover every distinct
+behaviour and all four kinds (normal/edge/long/stress); if one is weak or
+redundant, replace it. Return exactly the 10 final inputs."""
 
 _SIG_OBJ = {
     "type": "object",
@@ -588,20 +658,10 @@ SPEC_SCHEMA = {
                 "required": ["name", "stdin", "note", "kind"],
             },
         },
-        "coverage_assessment": {
-            "type": "string",
-            "description": "Self-review of whether the inputs cover every distinct "
-            "behaviour / corner case, and what was added to close gaps.",
-        },
-        "coverage_complete": {
-            "type": "boolean",
-            "description": "True only if the inputs exercise every distinct behaviour.",
-        },
     },
     "required": [
         "reasoning", "title", "stdin_format", "output_format",
         "function_name", "signatures", "test_inputs",
-        "coverage_assessment", "coverage_complete",
     ],
 }
 
@@ -658,7 +718,21 @@ def ml_transformer_system(language: str, category: str = "") -> str:
 RULES:
   - Follow the shared stdin_format / output_format from the spec EXACTLY.
   - Call the user's solution via the given signature; never redefine it.
-  - ANY_ORDER  -> deterministically normalise (sort every level) before printing.
+  - PREFER ANY_ORDER (sort_normalize) WHENEVER IT WORKS. If the correct output is a
+    fixed collection that merely may be listed in different orders (including
+    "return ALL ..." problems such as all shortest paths/sequences), normalise by
+    SORTING — do NOT write a validator. The sort_normalize path only re-orders what
+    the user returned; it never recomputes the answer, so it is efficient and
+    cannot recurse or stack-overflow. Only use validator_function when the answer
+    CONTENT itself can differ between correct submissions (e.g. "return ANY ONE").
+  - ANY_ORDER  -> deterministically normalise the user's returned value before
+    printing. Sort ONLY the dimensions the problem leaves unordered; PRESERVE the
+    internal order of any inherently-ordered sequence. For a list of sequences
+    (e.g. a list of transformation paths), sort the OUTER list with a deterministic
+    comparator (compare element by element, shorter-first on a prefix tie) and keep
+    each inner sequence's element order intact. Sort nested unordered groups at
+    every unordered level (e.g. words within an anagram group, then the groups).
+    Do NOT recompute the answer and do NOT recurse over the input — just normalise.
   - ANY_VALID  -> embed a validator: independently recompute what defines a
     correct answer (size/optimality + ALL structural constraints), validate the
     user's returned value against EVERY constraint and EVERY edge case, then print
@@ -675,6 +749,14 @@ RULES:
     user's answer is valid, print YOUR canonical answer (identical for all valid
     answers, so the single stored expected output matches). Two different optimal
     answers must BOTH be accepted.
+  - EFFICIENCY & NO STACK OVERFLOW: keep any recomputation efficient and ITERATIVE.
+    Do NOT use deep unbounded recursion (e.g. recursive DFS/backtracking that
+    enumerates exponentially many paths) — on larger inputs it blows the call stack
+    (StackOverflowError) or times out. Use BFS / iterative traversal with an
+    explicit queue or stack, memoisation, and only compute what the validation
+    actually needs (often a size/length/optimum, not the full enumeration). If you
+    find yourself enumerating ALL answers to validate one, reconsider: that problem
+    is probably ANY_ORDER (sort the user's output) rather than ANY_VALID.
   - Output deterministic, in the exact output_format. Return the COMPLETE program.
 If given reviewer feedback, fix exactly those issues and return the full file."""
     )

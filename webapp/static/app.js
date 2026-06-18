@@ -188,15 +188,15 @@ function renderResults(data) {
     return;
   }
 
-  // coverage
-  const cov = data.coverage || {};
-  let covHtml = `<div class="panel"><h3>Test coverage <span class="badge ${cov.coverage_complete ? "ok" : "warn"}">${cov.coverage_complete ? "complete" : "expanded"}</span></h3>` +
-    `<p class="notes">${esc(cov.assessment || "")}</p><p class="muted">${(data.inputs || []).length} shared stdin inputs (normal / edge / long / stress):</p><ul>`;
-  (data.inputs || []).forEach((t) => covHtml += `<li class="muted"><span class="kpill">${esc(t.kind || "normal")}</span> <b>${esc(t.name)}</b>: <code>${esc(JSON.stringify(t.stdin))}</code></li>`);
-  covHtml += `</ul>`;
-  if (data.test_cases_path) covHtml += `<p class="muted">Test cases written to <code>${esc(data.test_cases_path)}</code> (max ${data.inputs ? data.inputs.length : 0} cases).</p>`;
-  covHtml += `</div>`;
-  r.innerHTML += covHtml;
+  // test cases (the coverage-assessment write-up was removed by request — just
+  // list the test inputs that are generated and run on the base language)
+  const inputs = data.inputs || [];
+  let tcHtml = `<div class="panel"><h3>Test cases <span class="muted">(${inputs.length})</span></h3><ul>`;
+  inputs.forEach((t) => tcHtml += `<li class="muted"><span class="kpill">${esc(t.kind || "normal")}</span> <b>${esc(t.name)}</b>: <code>${esc(JSON.stringify(t.stdin))}</code></li>`);
+  tcHtml += `</ul>`;
+  if (data.test_cases_path) tcHtml += `<p class="muted">Written to <code>${esc(data.test_cases_path)}</code>.</p>`;
+  tcHtml += `</div>`;
+  r.innerHTML += tcHtml;
 
   // cross-language validator review
   r.innerHTML += renderValidatorReview(data);
