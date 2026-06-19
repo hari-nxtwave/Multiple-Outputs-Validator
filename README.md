@@ -25,17 +25,22 @@ three-agent pipeline:
    - **`ANY_ORDER`** — the answer *elements* are fixed but order is unspecified
      (e.g. *Group Anagrams*). → resolved by **sorting/normalising** the output in `main`.
    - **`ANY_VALID`** — genuinely different answers are all correct
-     (e.g. *Largest Divisible Subset*). → resolved by **writing a validator** in `main`.
+     (e.g. *Largest Divisible Subset*, *any Hamiltonian path*). → resolved by
+     **writing a validator** in `main` that **judges** the user's answer.
    - **`SINGLE`** — the answer is unique. → **rejected**: the tool does nothing,
      because the autograder already works. *(This is the "only work on multiple
      outputs questions" requirement.)*
 2. **Transformer** — rewrites `Main`:
    - `ANY_ORDER`: deterministically sorts every level of the output before printing.
-   - `ANY_VALID`: independently recomputes what makes an answer correct (size /
-     optimality + all structural constraints), validates the user's returned value
-     against **every** constraint, then prints a canonical answer when valid (so it
-     matches the single stored expected output) or the user's answer when invalid
-     (so it mismatches and fails).
+   - `ANY_VALID`: two separated parts. **(1)** a `check(...)` that **judges** the
+     user's returned value against **every** structural constraint by its properties
+     (and, for an *optimisation* problem, that its size/cost equals the optimal
+     **scalar**) — it does **not** search for a solution to validate one. **(2)** it
+     prints exactly one **canonical answer computed from the input only** (a fixed
+     construction like a snake path, a sorted/DP reconstruction, or a bounded
+     deterministic search) — identical for every valid submission, so it matches the
+     single stored expected output. On invalid it prints the user's raw answer (so it
+     mismatches and fails). Different valid answers all collapse to the same canonical.
 3. **Verifier (execution-based)** — for *every* multiple-outputs question, a
    fourth agent authors a Java **test suite** (a correct reference `Solution`,
    one or more *alternative-valid* `Solution`s, several *wrong* `Solution`s, and

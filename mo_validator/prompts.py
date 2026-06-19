@@ -199,61 +199,233 @@ public class Main {
 """
 
 _REFERENCE_EXAMPLE_ANY_VALID = """\
-================ REFERENCE EXAMPLE 2: ANY_VALID (Largest Divisible Subset) ======
-Strategy: write a validator in `main`. Independently recompute the property that
-defines a correct answer (here: the maximum chain length, via DP), then check the
-user's returned list: (1) every element is from the input set, (2) every pair is
-mutually divisible, (3) the size equals the true maximum length. If valid, print a
-CANONICAL answer the system recomputed (so it matches the single stored expected
-output); if invalid, print the user's output (which will fail to match).
+================ REFERENCE EXAMPLE 2: ANY_VALID ================================
+Structure EVERY ANY_VALID driver in TWO clearly-separated parts:
+
+  1. VALIDATE the user's answer — a dedicated `check(...)` method that JUDGES the
+     candidate against the problem's constraints and returns a boolean. It checks
+     PROPERTIES only (membership in the input, pairwise / adjacency / uniqueness /
+     ordering rules, length, and — for an OPTIMISATION problem — that the size/cost
+     equals the optimum, computed as a SCALAR via DP/greedy/BFS). `check` MUST NOT
+     search for / reconstruct a solution; it only inspects what the user returned.
+
+  2. OUTPUT exactly ONE canonical answer. The autograder stores a SINGLE expected
+     output, but different correct users return DIFFERENT valid answers — so every
+     valid answer must collapse to the SAME output:
+       * valid   -> print a CANONICAL answer computed FROM THE INPUT ONLY, so it is
+         identical for every valid submission. Build it directly when a fixed
+         construction exists (e.g. a snake path), otherwise with a bounded, pruned,
+         DETERMINISTIC search like a reference solver. NEVER print the user's answer
+         (or anything derived from it) on the valid branch — that would make two
+         correct users emit different outputs and defeat the validator.
+       * invalid -> print the user's raw answer, so it differs from the canonical
+         and fails to match.
+       * empty / null user answer -> handle it (print `[]`, or treat as invalid per
+         the problem). Never crash.
+
+---- 2a. OPTIMISATION example: Largest Divisible Subset (return ANY one largest) --
+`check` judges the user's list by PROPERTIES (+ optimal SIZE). The canonical output
+is rebuilt from the INPUT ONLY via sorted DP, so every valid submission prints it.
 
 ```java
 import java.util.*;
 
 public class Main {
+    static boolean check(List<Integer> ans, int[] arr, int optSize) {
+        if (ans == null || ans.size() != optSize) return false;   // must be optimal size
+        Set<Integer> pool = new HashSet<>();
+        for (int v : arr) pool.add(v);
+        for (int i = 0; i < ans.size(); i++) {
+            if (!pool.contains(ans.get(i))) return false;         // element from input
+            for (int j = i + 1; j < ans.size(); j++) {            // pairwise divisible
+                long a = ans.get(i), b = ans.get(j);
+                if (a % b != 0 && b % a != 0) return false;
+            }
+        }
+        return true;
+    }
+
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
         int n = sc.nextInt();
         int[] arr = new int[n];
         for (int i = 0; i < n; i++) arr[i] = sc.nextInt();
-        Set<Integer> set = new HashSet<>();
-        Solution sol = new Solution();
-        List<Integer> result = sol.findLargestChain(arr);
-        for (int num : arr) set.add(num);
-        // Independently compute the canonical maximum chain.
-        List<Integer> list = new ArrayList<>();
-        int[] length = new int[arr.length];
-        int[] previndex = new int[arr.length];
-        int maxLen = 0, index = -1;
-        Arrays.fill(length, 1);
-        Arrays.fill(previndex, -1);
+        List<Integer> ans = new Solution().findLargestChain(arr);
+
+        // Canonical answer + optimum size, from the INPUT ONLY (sorted DP + rebuild).
         Arrays.sort(arr);
-        for (int i = 0; i < arr.length; i++) {
-            for (int j = i - 1; j >= 0; j--) {
-                if (arr[i] % arr[j] == 0 && 1 + length[j] > length[i]) {
-                    length[i] = 1 + length[j];
-                    previndex[i] = j;
-                }
-            }
-            if (length[i] > maxLen) { maxLen = length[i]; index = i; }
+        int[] dp = new int[n], prev = new int[n];
+        int best = 0, end = -1;
+        for (int i = 0; i < n; i++) {
+            dp[i] = 1; prev[i] = -1;
+            for (int j = 0; j < i; j++)
+                if (arr[i] % arr[j] == 0 && dp[j] + 1 > dp[i]) { dp[i] = dp[j] + 1; prev[i] = j; }
+            if (dp[i] > best) { best = dp[i]; end = i; }
         }
-        while (index != -1) { list.add(arr[index]); index = previndex[index]; }
-        // Validate the user's returned answer.
-        boolean flag = true;
-        if (result.size() != list.size()) flag = false;
-        for (int i = 0; i < result.size() && flag; i++) {
-            for (int j = 0; j < result.size(); j++) {
-                if (i != j) {
-                    if ((!set.contains(result.get(i)) || !set.contains(result.get(j)))
-                            || ((result.get(i) % result.get(j) != 0)
-                                && (result.get(j) % result.get(i) != 0))) {
-                        flag = false; break;
-                    }
-                }
+        List<Integer> canon = new ArrayList<>();
+        for (int i = end; i >= 0; i = prev[i]) canon.add(arr[i]);
+        Collections.reverse(canon);
+
+        List<Integer> out = check(ans, arr, best) ? canon            // valid -> canonical
+                                                  : (ans == null ? new ArrayList<>() : ans); // invalid -> raw
+        StringBuilder sb = new StringBuilder();
+        for (int x : out) sb.append(x).append(' ');
+        System.out.println(sb.toString().trim());
+    }
+}
+```
+
+---- 2b. FEASIBILITY example: any Hamiltonian path in an UNCONSTRAINED R x C grid -
+"Return ANY ordering of all cells visiting each once via 4-adjacent moves." `check`
+validates the user's path; the canonical is a fixed "snake", built from the input
+only (no search). VERIFIED: a different valid path (e.g. column-major snake)
+collapses to the SAME canonical, and an invalid path prints itself and mismatches.
+USE THE SNAKE ONLY WHEN THE GRID IS UNCONSTRAINED. The moment the problem adds an
+ordering constraint (numbered cells visited in order), blocked cells, or fixed
+endpoints, the snake will VIOLATE it and your canonical becomes invalid — switch to
+the COMPLETE BACKTRACKING canonical of EXAMPLE 2c.
+
+```java
+import java.util.*;
+
+public class Main {
+    // 1. VALIDATE the user's path by PROPERTIES — never searches for a path.
+    static boolean check(List<int[]> path, int r, int c) {
+        if (path == null || path.size() != r * c) return false;          // covers every cell once
+        boolean[][] seen = new boolean[r][c];
+        for (int i = 0; i < path.size(); i++) {
+            int[] cell = path.get(i);
+            if (cell == null || cell.length != 2) return false;
+            int x = cell[0], y = cell[1];
+            if (x < 0 || x >= r || y < 0 || y >= c) return false;        // in bounds
+            if (seen[x][y]) return false;                                // no repeats
+            seen[x][y] = true;
+            if (i > 0) {                                                 // 4-adjacent step
+                int px = path.get(i - 1)[0], py = path.get(i - 1)[1];
+                if (Math.abs(px - x) + Math.abs(py - y) != 1) return false;
             }
         }
-        if (flag) for (int x : list) System.out.print(x + " ");
-        else for (int x : result) System.out.print(x + " ");
+        return true;
+    }
+
+    // 2. Canonical path from the INPUT ONLY ("snake"): same for every valid answer.
+    static List<int[]> canonical(int r, int c) {
+        List<int[]> out = new ArrayList<>();
+        for (int x = 0; x < r; x++)
+            if (x % 2 == 0) for (int y = 0; y < c; y++)      out.add(new int[]{x, y});
+            else            for (int y = c - 1; y >= 0; y--) out.add(new int[]{x, y});
+        return out;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int r = sc.nextInt(), c = sc.nextInt();
+        List<int[]> path = new Solution().findPath(r, c);     // user's candidate
+
+        if (check(path, r, c))                                // valid  -> canonical
+            for (int[] cell : canonical(r, c)) System.out.println(cell[0] + " " + cell[1]);
+        else if (path == null || path.isEmpty())
+            System.out.println("[]");                         // empty user answer
+        else
+            for (int[] cell : path) System.out.println(cell[0] + " " + cell[1]);  // invalid -> raw
+    }
+}
+```
+
+---- 2c. CONSTRAINED canonical via COMPLETE backtracking (VERIFIED) -------------
+When the problem adds constraints that rule out a hard-coded construction like the
+snake — e.g. some cells are numbered checkpoints that MUST be visited in increasing
+order (a `k` / `window` parameter) — build the canonical the way a reference SOLVER
+would: a COMPLETE, deterministic backtracking search (fixed start scan + fixed
+direction order) that returns the FIRST valid answer it finds. "Complete" means it
+is GUARANTEED to find a valid answer whenever one exists.
+
+DO NOT use a greedy / BFS-stitching heuristic to build the canonical (e.g. "BFS a
+path between consecutive checkpoints, then snake-fill the rest"). Heuristics are
+NOT complete: they break adjacency where segments join, leave gaps, and return an
+empty/invalid path even when a valid tour exists — so the validator then prints
+empty and EVERY correct submission mismatches. Use backtracking. (`check` still only
+inspects the user's answer; this search is for the OUTPUT canonical only.)
+
+```java
+import java.util.*;
+
+public class Main {
+    // VALIDATE the user's tour by PROPERTIES (never searches).
+    static boolean check(List<List<Integer>> path, int[][] grid, int k) {
+        int m = grid.length, n = grid[0].length;
+        if (path == null || path.size() != m * n) return false;       // every cell once
+        boolean[][] seen = new boolean[m][n];
+        int expect = 1;                                               // next checkpoint due
+        for (int idx = 0; idx < path.size(); idx++) {
+            List<Integer> c = path.get(idx);
+            if (c == null || c.size() != 2) return false;
+            int x = c.get(0), y = c.get(1);
+            if (x < 0 || x >= m || y < 0 || y >= n) return false;     // in bounds
+            if (seen[x][y]) return false;                             // no repeats
+            seen[x][y] = true;
+            if (idx > 0) {                                            // 4-adjacent step
+                int px = path.get(idx - 1).get(0), py = path.get(idx - 1).get(1);
+                if (Math.abs(px - x) + Math.abs(py - y) != 1) return false;
+            }
+            if (grid[x][y] != 0) {                                    // checkpoint in order
+                if (grid[x][y] != expect) return false;
+                expect++;
+            }
+        }
+        return expect == k + 1;                                       // all k, in order
+    }
+
+    // CANONICAL via COMPLETE backtracking — deterministic, input-only.
+    static int[][] DIRS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    static List<List<Integer>> canonical(int[][] grid, int k) {
+        int m = grid.length, n = grid[0].length;
+        for (int i = 0; i < m; i++)
+            for (int j = 0; j < n; j++) {
+                if (grid[i][j] > 1) continue;                         // can't START past checkpoint 1
+                int[][] g = new int[m][n];
+                for (int r = 0; r < m; r++) g[r] = grid[r].clone();   // search on a copy
+                List<List<Integer>> res = new ArrayList<>();
+                if (build(g, i, j, 1, res, m, n)) return res;
+            }
+        return new ArrayList<>();
+    }
+    static boolean build(int[][] g, int i, int j, int index, List<List<Integer>> res, int m, int n) {
+        if (i < 0 || j < 0 || i >= m || j >= n || g[i][j] == -1
+                || (g[i][j] != 0 && g[i][j] != index)) return false;  // off-grid / used / wrong checkpoint
+        res.add(List.of(i, j));
+        if (res.size() == m * n) return true;                         // all cells placed in order
+        int next = (g[i][j] == index) ? index + 1 : index;
+        int temp = g[i][j];
+        g[i][j] = -1;                                                 // mark used
+        for (int[] d : DIRS)
+            if (build(g, i + d[0], j + d[1], next, res, m, n)) return true;
+        res.remove(res.size() - 1);                                  // backtrack
+        g[i][j] = temp;
+        return false;
+    }
+
+    static void print(List<List<Integer>> p) {
+        for (List<Integer> c : p) System.out.println(c.get(0) + " " + c.get(1));
+    }
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int m = sc.nextInt(), n = sc.nextInt();
+        int[][] grid = new int[m][n];
+        for (int i = 0; i < m; i++) for (int j = 0; j < n; j++) grid[i][j] = sc.nextInt();
+        int k = sc.nextInt();
+        List<List<Integer>> path = new Solution().planExhibitTour(grid, k);
+        if (check(path, grid, k)) {                                   // valid -> canonical
+            List<List<Integer>> canon = canonical(grid, k);
+            // SELF-CHECK: the canonical must itself pass check(); if the builder
+            // failed (bug / no path found), fall back to the user's valid answer
+            // rather than print an invalid/empty canonical.
+            print(check(canon, grid, k) ? canon : path);
+        } else if (path == null || path.isEmpty()) {
+            System.out.println("[]");
+        } else {
+            print(path);                                              // invalid -> raw -> mismatches
+        }
     }
 }
 ```
@@ -291,15 +463,24 @@ RULES FOR YOUR REWRITE:
     supplies it. Your code lives only in `Main`.
   - ANY_ORDER -> normalise output deterministically (sort every level) before
     printing. Keep the printed token/line format identical to the original.
-  - ANY_VALID -> embed a validator. Independently recompute whatever defines a
-    correct answer (size/optimality + all structural constraints), validate the
-    user's returned value against EVERY constraint the problem imposes, then:
-        * on valid   -> print a CANONICAL answer your code computed, in the
-          original output format, so it matches the single stored expected output;
+  - ANY_VALID -> embed a validator in TWO separated parts. PART 1: a `check(...)`
+    that JUDGES the user's returned value against EVERY structural constraint by its
+    PROPERTIES (and, for an OPTIMISATION problem, that its size/cost equals the
+    optimal SCALAR you compute). `check` must NOT search for / reconstruct a solution
+    to validate one — that is slow, can stack-overflow, and wrongly rejects valid
+    answers that differ from the one you found. PART 2: output exactly ONE canonical
+    answer:
+        * on valid   -> print a CANONICAL answer computed FROM THE INPUT ONLY (a
+          fixed construction, or a bounded deterministic search like a reference
+          solver), identical for every valid submission, so the single stored
+          expected output matches all of them. NEVER print the user's answer on the
+          valid branch — different correct users return different valid answers, so
+          printing the user's answer makes only one of them match;
         * on invalid -> print the user's raw answer (so it mismatches and fails).
     Think carefully about EVERY constraint and EVERY edge case (empty result,
     single element, duplicates, the optimal value being 0/empty, ties, elements
-    not in the input, wrong size, etc.).
+    not in the input, wrong size, etc.). Never crash on a malformed/empty answer —
+    treat it as invalid. Keep the canonical-output builder efficient and bounded.
   - Keep the trailing-output convention (spaces / newlines) consistent with the
     original `main` so the stored expected output still matches.
   - Output must be a COMPLETE, COMPILABLE `Main.java` (with imports).
@@ -612,6 +793,20 @@ Produce:
         overflow issues (e.g. values near the stated limits, near-worst-case
         structure). Still bounded to remain feasible for an efficient correct
         solution within a few seconds (>= 1).
+    CRITICAL SIZE CAP FOR SEARCH-BASED (NP-hard) PROBLEMS: if a CORRECT solution —
+    and the validator's canonical builder — must SEARCH (backtracking / DFS) because
+    the problem is NP-hard or has no known polynomial algorithm (Hamiltonian
+    path/tour, exact cover, graph colouring, subset/partition with constraints,
+    ordered-checkpoint tours, etc.), then NO efficient O(n^2) solution exists and a
+    backtracking solver blows up EXPONENTIALLY. For these, keep EVERY input SMALL
+    enough that backtracking finishes in a couple of seconds — e.g. a grid of at
+    most ~5x5 (<= ~25 cells), at most ~12-15 nodes/elements. Do NOT emit a large
+    "long"/"stress" instance (a 8x8 / 20x20 grid, hundreds of elements) for such a
+    problem — it WILL time out the reference and equivalent solutions and fail
+    verification. Make "long"/"stress" stress the STRUCTURE (tricky checkpoint
+    placement, near-worst-case branching, forced backtracking) at that small size,
+    NOT raw size. Only scale to hundreds of elements when a genuinely polynomial
+    correct solution exists.
     Provide EXACTLY 10 inputs total — covering all four kinds (a few normal,
     several edge, at least one long, at least one stress). Inputs must be
     language-independent stdin strings.
@@ -733,30 +928,61 @@ RULES:
     each inner sequence's element order intact. Sort nested unordered groups at
     every unordered level (e.g. words within an anagram group, then the groups).
     Do NOT recompute the answer and do NOT recurse over the input — just normalise.
-  - ANY_VALID  -> embed a validator: independently recompute what defines a
-    correct answer (size/optimality + ALL structural constraints), validate the
-    user's returned value against EVERY constraint and EVERY edge case, then print
-    a CANONICAL answer when valid (so it matches the single stored expected
-    output) or the user's raw answer when invalid (so it mismatches). Never crash
-    on a malformed/empty user answer — treat it as invalid.
-    CRITICAL ANY_VALID PITFALL — do NOT reject a valid answer just because it
-    differs from the specific canonical answer you reconstructed. There are
-    MULTIPLE correct answers by definition; an answer is valid iff it satisfies
-    every structural constraint AND is optimal (e.g. its size/cost equals the
-    optimum you computed) — NOT iff its elements equal your canonical answer's
-    elements. Validate by PROPERTIES (membership, pairwise/structural rules,
-    optimal size/cost), never by element-equality against your canonical. When the
-    user's answer is valid, print YOUR canonical answer (identical for all valid
-    answers, so the single stored expected output matches). Two different optimal
-    answers must BOTH be accepted.
-  - EFFICIENCY & NO STACK OVERFLOW: keep any recomputation efficient and ITERATIVE.
-    Do NOT use deep unbounded recursion (e.g. recursive DFS/backtracking that
-    enumerates exponentially many paths) — on larger inputs it blows the call stack
-    (StackOverflowError) or times out. Use BFS / iterative traversal with an
-    explicit queue or stack, memoisation, and only compute what the validation
-    actually needs (often a size/length/optimum, not the full enumeration). If you
-    find yourself enumerating ALL answers to validate one, reconsider: that problem
-    is probably ANY_ORDER (sort the user's output) rather than ANY_VALID.
+  - ANY_VALID  -> embed a validator in TWO clearly-separated parts (see REFERENCE
+    EXAMPLE 2):
+    PART 1 — VALIDATE (a dedicated `check(...)` that returns a boolean). JUDGE the
+    user's returned candidate against EVERY constraint by its PROPERTIES (membership
+    in the input, pairwise / adjacency / uniqueness / ordering / length rules, every
+    edge case) and, for an OPTIMISATION problem, that its size/cost equals the
+    optimum (computed as a SCALAR via DP/greedy/BFS). `check` MUST NOT search for or
+    reconstruct a solution — it only inspects what the user returned. Validating by
+    searching (recursive DFS/backtracking to find a path/subset, then comparing) is
+    a top bug: it is slow, can stack-overflow, and wrongly REJECTS valid answers
+    that differ from the one it found.
+    PART 2 — OUTPUT exactly ONE canonical answer. The autograder stores a SINGLE
+    expected output, but different correct users return DIFFERENT valid answers, so
+    every valid answer must collapse to the SAME output:
+      * VALID   -> print a CANONICAL answer computed FROM THE INPUT ONLY, so it is
+        identical for every valid submission. Build it directly when a fixed
+        construction exists (e.g. a snake path, sorted/DP reconstruction); otherwise
+        with a COMPLETE, DETERMINISTIC search like a reference solver — backtracking
+        / DFS with pruning that returns the first valid answer in a fixed exploration
+        order (see EXAMPLE 2c). It depends ONLY on the input, NEVER on the user's
+        answer. DO NOT build the canonical with a greedy / BFS-stitching HEURISTIC
+        (e.g. "BFS between checkpoints then fill the rest"): heuristics are NOT
+        complete — they break adjacency, leave gaps, and return an empty/invalid
+        canonical even when a valid answer exists, so the validator prints empty and
+        EVERY correct submission mismatches. The canonical builder MUST be complete
+        (guaranteed to find a valid answer if one exists).
+        CHOOSE THE RIGHT CONSTRUCTION: a direct fixed pattern (snake, sorted order)
+        is valid ONLY if it provably satisfies EVERY constraint. If the problem adds
+        ORDERING or PLACEMENT constraints — numbered checkpoints that must be visited
+        in order, a fixed start/end, blocked/forbidden cells, capacities — a snake or
+        other fixed pattern will GENERALLY VIOLATE them, making your canonical itself
+        invalid. In that case you MUST use the complete backtracking search of
+        EXAMPLE 2c, not the snake of EXAMPLE 2b.
+        SELF-CHECK (REQUIRED): the canonical your code builds MUST itself pass your
+        own `check(...)`. Mentally (or in code) confirm `check(canonical(input))` is
+        TRUE for every input — if it would be false, you picked the wrong
+        construction. As a safety net, if the builder returns empty/`check`-failing
+        output for a user answer that PASSED `check`, print the user's answer instead.
+      * INVALID -> print the user's raw answer (so it differs from the canonical and
+        fails to match).
+      * empty / null user answer -> handle explicitly (print `[]`, or treat as
+        invalid per the problem). Never crash.
+    FORBIDDEN on the valid branch: printing the user's returned value or anything
+    derived from it. NEVER write `if (valid) { print the user's answer }` — two
+    correct users would then emit different outputs and only one matches the single
+    stored expected output, defeating the validator.
+  - CORRECTNESS BEFORE SPEED for the canonical builder: a COMPLETE backtracking /
+    DFS search that always finds a valid answer (when one exists) is REQUIRED — never
+    trade it for a faster heuristic that is sometimes wrong. The spec keeps inputs
+    bounded so a pruned backtracking search is feasible; prune as soon as a constraint
+    is violated (and search on a COPY of the input so `check` still sees the original).
+    `check` itself stays cheap (a linear/quadratic scan, plus at most one scalar
+    DP/BFS for the optimum). Only if recursion depth could genuinely overflow the
+    stack on the stress inputs, convert the SAME complete search to an explicit stack
+    — keep it complete, do not downgrade to a heuristic.
   - Output deterministic, in the exact output_format. Return the COMPLETE program.
 If given reviewer feedback, fix exactly those issues and return the full file."""
     )
@@ -958,14 +1184,27 @@ Review the validators ADVERSARIALLY and HOLISTICALLY:
      category:
        * ANY_ORDER  -> normalise every level deterministically so any correctly
          ordered answer collapses to the canonical output.
-       * ANY_VALID  -> independently recompute what makes an answer correct
-         (size/optimality + EVERY structural constraint), ACCEPT every genuinely
-         valid answer (including the alternative-correct ones), and REJECT every
-         answer that violates ANY constraint. It must never crash on a malformed
-         or empty user answer (treat it as invalid), and must be deterministic.
+       * ANY_VALID  -> JUDGE the user's answer: a `check` step verifies it against
+         EVERY structural constraint (and, for an OPTIMISATION problem, that its
+         size/cost equals the optimal SCALAR), ACCEPTING every genuinely valid answer
+         (including alternative-correct ones) and REJECTING every answer that
+         violates ANY constraint, WITHOUT searching for a solution to validate one.
+         On the VALID branch it MUST print a CANONICAL answer derived FROM THE INPUT
+         ONLY (identical for every valid answer) — if it instead prints the user's
+         answer or anything derived from it, that is a HARD FAIL (two correct users
+         would emit different outputs against one stored expected output). It must
+         never crash on a malformed/empty answer (treat as invalid), be
+         deterministic, and not time out / overflow building the canonical.
+         NOTE: a COMPLETE backtracking/DFS that scans starts and neighbours in a
+         FIXED order and returns the first valid answer IS deterministic and a pure
+         function of the input (it never reads the user's answer) — do NOT flag that
+         as non-deterministic or as varying between submissions; only flag REAL
+         non-determinism (randomness, hash-iteration order, reading the user's answer).
      Flag validators that are too lenient (accept a wrong answer), too strict
-     (reject a valid alternative), order-sensitive when they should not be, or
-     liable to crash / overflow / time out on the long & stress inputs.
+     (reject a valid alternative — ESPECIALLY by reconstructing one solution and
+     comparing for equality), that SEARCH for / reconstruct a full solution instead
+     of judging the user's (recursive DFS/backtracking), or are liable to crash /
+     overflow / time out on the long & stress inputs.
   2. Cross-language — the four validators implement the SAME contract. Flag any
      INCONSISTENCY: different accept/reject decisions for the same answer,
      different canonical output, or one language enforcing a constraint the
@@ -1097,6 +1336,37 @@ def validator_function_review_system(language: str, category: str = "") -> str:
         "    canonical output) and REJECTs every invalid one (wrong size, violated\n"
         "    constraint, element not from input, sub-optimal, empty/garbage). It is\n"
         "    neither too lenient nor too strict.\n"
+        "  - JUDGE, DON'T SOLVE (validation): the `check`/validation step must CHECK the\n"
+        "    user's answer against the constraints (and, for optimisation, a single\n"
+        "    recomputed optimal SCALAR). Flag it if VALIDATION searches for /\n"
+        "    reconstructs a solution then accepts only by equality to it (that wrongly\n"
+        "    rejects other valid answers). (Computing a canonical for the OUTPUT is\n"
+        "    fine — see below.)\n"
+        "  - DETERMINISTIC OUTPUT (ANY_VALID, HARD FAIL): on the VALID branch it MUST\n"
+        "    print a CANONICAL answer derived FROM THE INPUT ONLY (a fixed construction,\n"
+        "    a sorted/DP reconstruction, or a bounded deterministic search) — identical\n"
+        "    for every valid answer. If the valid branch prints the user's returned\n"
+        "    answer (or ANYTHING derived from it), it is BROKEN and you MUST mark it\n"
+        "    not-ok: different correct users would emit different outputs, but the\n"
+        "    autograder stores ONE expected output, so only one valid user would pass.\n"
+        "    Also flag a canonical OUTPUT builder that is a greedy / BFS-stitching\n"
+        "    HEURISTIC (incomplete — can return empty/invalid even when a valid answer\n"
+        "    exists, so the driver prints empty and every correct submission mismatches):\n"
+        "    it MUST be a COMPLETE search (backtracking/DFS) or a proven direct\n"
+        "    construction. Also flag one that could time out / stack-overflow on the\n"
+        "    long & stress inputs. The invalid branch prints the user's answer.\n"
+        "  - NOT A BUG — fixed-order complete search IS deterministic: a COMPLETE\n"
+        "    backtracking/DFS that scans start positions and neighbours in a FIXED order\n"
+        "    and returns the FIRST valid answer is DETERMINISTIC and a pure function of\n"
+        "    the INPUT. `canonical()` does NOT read the user's answer, so the SAME grid\n"
+        "    always yields the SAME canonical regardless of which valid path the user\n"
+        "    returned (row-major vs column-major submissions BOTH get the one canonical\n"
+        "    the search finds — they match). This is exactly the 'complete search with a\n"
+        "    fixed tiebreaker' form and is CORRECT — do NOT flag it as non-deterministic\n"
+        "    or as 'varying between submissions'. Flag non-determinism ONLY when it is\n"
+        "    REAL: randomness, time-dependence, iterating a HashSet/HashMap to build the\n"
+        "    output (hash-order), or actually reading the user's answer to construct the\n"
+        "    canonical. If you cannot point to one of those, the canonical is fine.\n"
         "  - ROBUSTNESS: never crashes on a malformed/empty answer (treat it as\n"
         "    invalid); output is deterministic.\n\n"
         "LANGUAGE & CALLING CONTRACT:\n" + LANG_CONTRACT[language]

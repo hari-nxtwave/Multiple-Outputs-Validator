@@ -75,6 +75,30 @@ def _noop(stage: str, message: str) -> None:
     pass
 
 
+# The canonical base language. The validator is authored, execution-verified and
+# auto-fixed here, then translated to the rest — so this is the one language whose
+# driver is proven by actually compiling and running it.
+_BASE_LANGUAGE = "java"
+
+
+def _runtime_ready(lang: str) -> bool:
+    runner = get_runner(lang)
+    return bool(runner and runner.available())
+
+
+def _pick_base(languages: list[str]) -> str | None:
+    """Choose the language to execution-verify (then translate from).
+
+    Always Java when the JDK is available — Java is the language whose validator is
+    compiled, run and auto-fixed against the suite, and every other language is a
+    translation of it. Falls back to the first usable selected language only if no
+    Java runtime is present.
+    """
+    if _runtime_ready(_BASE_LANGUAGE):
+        return _BASE_LANGUAGE
+    return next((l for l in languages if _runtime_ready(l)), None)
+
+
 def _normalize_suite(flat: dict[str, Any]) -> dict[str, Any]:
     """Adapt the flat test-suite tool output into the internal suite structure.
 
@@ -167,12 +191,13 @@ def _attribute_failure(ex: ExecResult, suite_regens: int) -> tuple[str, str]:
         driver_feedback = (
             ex.feedback
             + "\n\nThese WRONG submissions are genuinely incorrect yet the driver "
-            "accepted them (it printed the canonical answer for them). Your "
-            "validator is TOO LENIENT: it is not checking every constraint that "
-            "makes an answer correct. Re-derive what an answer must satisfy "
-            "(size / optimality AND every structural constraint) and reject any "
-            "user answer that violates ANY of them — only print the canonical "
-            "answer when the user's answer is fully valid."
+            "accepted them (it printed the canonical answer for them). Your `check` "
+            "step is TOO LENIENT: it is not checking every constraint that makes an "
+            "answer correct. JUDGE the user's answer against EVERY structural "
+            "constraint and, for an optimisation problem, against the optimal SCALAR "
+            "value (the `check` step must not search for a solution to validate one). "
+            "Reject any user answer that violates ANY constraint; only print the "
+            "input-derived canonical answer when the user's answer is fully valid."
         )
         return driver_feedback, ""
 
@@ -576,11 +601,15 @@ def run_multilang(
 
     # ---- 3. Base language: test suite + driver + EXECUTION verify ---------- #
     # Optimised flow: do the expensive work (generate solutions, compile & run, and
-    # review) in ONE language only — the language the user selected — then translate
-    # the reviewed validator to the others without re-running anything. We honour the
-    # selection in order, so the first usable selected language becomes the base.
-    base = next((l for l in languages
-                 if get_runner(l) and get_runner(l).available()), None)
+    # review) in ONE language only, then translate the reviewed validator to the
+    # others without re-running anything.
+    #
+    # The base is ALWAYS Java when a JDK is available — Java is the language whose
+    # validator is actually compiled, run and auto-fixed against the test suite, and
+    # every other language is a translation of it (so the executed-and-verified
+    # artifact the user relies on is the Java one). Only if no JDK is present do we
+    # fall back to the first usable selected language.
+    base = _pick_base(languages)
     if base is None:
         result.message = ("No usable language runtime available to build/verify the "
                           "base validator.")

@@ -1,58 +1,58 @@
 {
-  "title": "Generate Parentheses",
-  "category": "ANY_ORDER",
-  "stdin_format": "\nA single integer n on one line, where 1 \u2264 n \u2264 10.\n",
-  "output_format": "\nA list of valid n-parenthesis strings, sorted lexicographically, one per line.\nEach line contains exactly one string of 2n characters (n opening and n closing parentheses).\nThe strings must satisfy: at every prefix, #closing_parens \u2264 #opening_parens.\n",
+  "title": "Plan Exhibit Tour",
+  "category": "ANY_VALID",
+  "stdin_format": "Line 1: Two integers m and n (grid dimensions, 1 \u2264 m, n \u2264 5).\nLines 2 to m+1: n integers each, representing the grid. 0 means ordinary room; 1 to k means numbered exhibit (each number 1..k appears exactly once).\nLine m+2: One integer k (0 \u2264 k \u2264 m*n, number of numbered exhibits).",
+  "output_format": "m*n lines, each containing two space-separated integers \"row col\" (0-indexed), representing the cells of the tour in visiting order. The tour must visit every cell exactly once, moving only between 4-directionally adjacent cells, and must visit numbered exhibits 1..k in increasing order.",
   "count": 10,
   "test_cases": [
     {
-      "name": "Example 1",
-      "stdin": "3",
+      "name": "normal-2x2-no-checkpoints",
+      "stdin": "2 2\n0 0\n0 0\n0",
       "kind": "normal"
     },
     {
-      "name": "Example 2",
-      "stdin": "1",
+      "name": "normal-2x3-one-checkpoint",
+      "stdin": "2 3\n1 0 0\n0 0 0\n1",
       "kind": "normal"
     },
     {
-      "name": "n=2",
-      "stdin": "2",
+      "name": "normal-3x3-two-checkpoints",
+      "stdin": "3 3\n1 0 0\n0 0 0\n0 0 2\n2",
       "kind": "normal"
     },
     {
-      "name": "Edge: n=0",
-      "stdin": "0",
+      "name": "edge-1x1-trivial",
+      "stdin": "1 1\n0\n0",
       "kind": "edge"
     },
     {
-      "name": "Edge: n=1 (duplicate coverage)",
-      "stdin": "1",
+      "name": "edge-1x4-linear",
+      "stdin": "1 4\n0 0 0 0\n0",
       "kind": "edge"
     },
     {
-      "name": "Edge: n=4",
-      "stdin": "4",
+      "name": "edge-2x2-all-checkpoints",
+      "stdin": "2 2\n1 2\n3 4\n4",
       "kind": "edge"
     },
     {
-      "name": "Edge: n=5",
-      "stdin": "5",
+      "name": "edge-3x3-tight-checkpoint-order",
+      "stdin": "3 3\n1 0 0\n0 0 2\n0 0 3\n3",
       "kind": "edge"
     },
     {
-      "name": "Long: n=8",
-      "stdin": "8",
+      "name": "edge-2x4-checkpoint-diversity",
+      "stdin": "2 4\n1 0 0 2\n0 0 0 0\n2",
+      "kind": "edge"
+    },
+    {
+      "name": "long-4x5-moderate-complexity",
+      "stdin": "4 5\n1 0 0 0 0\n0 0 0 0 0\n0 0 2 0 0\n0 0 0 3 4\n4",
       "kind": "long"
     },
     {
-      "name": "Stress: n=9",
-      "stdin": "9",
-      "kind": "stress"
-    },
-    {
-      "name": "Stress: n=10",
-      "stdin": "10",
+      "name": "stress-5x5-many-checkpoints",
+      "stdin": "5 5\n1 0 0 0 2\n0 0 0 0 0\n0 0 3 0 0\n0 0 0 4 0\n5 0 0 6 7\n8",
       "kind": "stress"
     }
   ]
