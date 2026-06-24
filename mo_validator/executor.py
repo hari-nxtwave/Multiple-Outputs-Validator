@@ -91,9 +91,22 @@ def verify_by_execution(
         return res
 
     expected: dict[str, str] = {}
+    ref_crashes: list[str] = []
     for tin in inputs:
         rr = ref_runs[tin["name"]]
         if not rr.ok:
+            # The reference is a known-correct solution and the DRIVER owns all
+            # stdin reading, so a crash here almost always means the driver does
+            # not handle this (contract-valid) input — most often a parsing crash
+            # on a degenerate case such as empty / minimal input. Record it as a
+            # FAILING reference case (not merely a warning) so the auto-fix loop
+            # is actually told to fix it; otherwise the same crash recurs every
+            # iteration, never attributed and never addressed.
+            ref_crashes.append(tin["name"])
+            res.cases.append(CaseResult(
+                "reference", "reference", tin["name"], False,
+                f"reference crashed (the driver must handle this input, not "
+                f"crash): {rr.error}"))
             res.harness_warnings.append(
                 f"Reference crashed on input '{tin['name']}': {rr.error}")
             continue
@@ -209,6 +222,17 @@ def verify_by_execution(
         lines = ["Execution found failing cases the driver must fix:"]
         for c in failures[:25]:
             lines.append(f"- [{c.kind}] solution='{c.solution}', input='{c.test_input}': {c.detail}")
+        if ref_crashes:
+            lines.append(
+                "The reference (known-correct) solution CRASHED on these inputs: "
+                f"{ref_crashes}. The driver does ALL stdin reading, so this is a "
+                "DRIVER bug — almost always reading input that may be absent/empty "
+                "without guarding (e.g. Java Scanner.nextLine()/nextInt() on empty "
+                "stdin throws NoSuchElementException; cin/getline/readline on EOF). "
+                "Read input DEFENSIVELY: treat missing/empty input as the empty "
+                "case (guard with hasNextLine()/hasNext(), or read all of stdin and "
+                "handle the empty string) and still call the solution and print the "
+                "canonical for that case. NEVER crash on any contract-valid input.")
         if any_wrong and not any_caught:
             lines.append(
                 "No 'wrong' submission was rejected on any input — the validator "

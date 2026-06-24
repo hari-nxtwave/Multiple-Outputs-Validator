@@ -913,6 +913,18 @@ def ml_transformer_system(language: str, category: str = "") -> str:
 RULES:
   - Follow the shared stdin_format / output_format from the spec EXACTLY.
   - Call the user's solution via the given signature; never redefine it.
+  - READ INPUT DEFENSIVELY — never crash on a contract-valid input, ESPECIALLY the
+    EMPTY / minimal case. The input may be an empty line or have fewer tokens than a
+    typical case; reading past the end must yield the EMPTY case, not throw. Then
+    still call the user's solution (with "" / an empty array) and print the canonical
+    for that empty case (often just an empty line). Per language:
+      * Java: a bare `sc.nextLine()` / `sc.nextInt()` on empty stdin throws
+        NoSuchElementException. Guard it: `String s = sc.hasNextLine() ? sc.nextLine()
+        : "";`, `int n = sc.hasNextInt() ? sc.nextInt() : 0;` — or read all of
+        System.in once and parse the (possibly empty) string.
+      * Python: `data = sys.stdin.read()`; handle `data == ""` and empty `.split()`.
+      * JavaScript: `const data = require('fs').readFileSync(0, 'utf8')`; handle "".
+      * C++: check the result of `cin >>` / `getline`; treat failure/EOF as empty.
   - PREFER ANY_ORDER (sort_normalize) WHENEVER IT WORKS. If the correct output is a
     fixed collection that merely may be listed in different orders (including
     "return ALL ..." problems such as all shortest paths/sequences), normalise by
