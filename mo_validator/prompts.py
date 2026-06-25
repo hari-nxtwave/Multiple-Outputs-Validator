@@ -710,26 +710,44 @@ LANG_CONTRACT = {
         "your driver in one file, so any function/class it defines is already in "
         "scope. The driver reads stdin (e.g. `import sys; data = sys.stdin."
         "read().split()`), calls the solution's top-level function, validates, "
-        "and prints to stdout. Do NOT redefine the solution function in the driver."
+        "and prints to stdout. Do NOT redefine the solution function in the driver. "
+        "AUXILIARY TYPE: if the problem uses a helper type (e.g. `TreeNode`, "
+        "`ListNode`, `Node`), the SOLUTION defines it; the driver USES it without "
+        "re-defining it (a second `class TreeNode` in the driver would shadow the "
+        "solution's and break instance checks)."
     ),
     "javascript": (
         "JAVASCRIPT (Node.js 18). The user's solution source is concatenated "
         "ABOVE your driver in one file, so its functions are in scope. The driver "
         "reads stdin with `require('fs').readFileSync(0,'utf8')`, calls the "
-        "solution's function, validates, and prints with console.log."
+        "solution's function, validates, and prints with console.log. "
+        "AUXILIARY TYPE: if the problem uses a helper type (e.g. `TreeNode`, "
+        "`ListNode`, `Node`), the SOLUTION defines it; the driver USES it without "
+        "re-declaring it (a second `class TreeNode` would collide)."
     ),
     "cpp": (
         "C++ (g++ -std=c++17). The user's solution source is concatenated ABOVE "
         "your driver in one file. The driver provides `int main()`, reads stdin "
         "with cin, calls the solution's function/class, validates, prints with "
         "cout. You may `#include <bits/stdc++.h>` and `using namespace std;` "
-        "(duplicate includes across the two parts are harmless)."
+        "(duplicate includes across the two parts are harmless). "
+        "AUXILIARY TYPE: if the problem uses a helper type (e.g. `TreeNode`, "
+        "`ListNode`, `Node`), the SOLUTION defines it ABOVE the driver; the driver "
+        "USES it without re-defining it (a second `struct TreeNode` is a "
+        "`redefinition` compile error)."
     ),
     "java": (
         "JAVA (17+). The driver is the file `Main.java` declaring `public class "
         "Main` with `public static void main(String[] args)`. The user's solution "
         "is a SEPARATE file declaring a NON-public `class Solution`; both compile "
-        "together. The driver does `new Solution().<method>(...)`."
+        "together. The driver does `new Solution().<method>(...)`. "
+        "AUXILIARY TYPE (CRITICAL): if the problem uses a helper type (e.g. "
+        "`TreeNode`, `ListNode`, `Node`), it is declared EXACTLY ONCE, in "
+        "`Solution.java` (a non-public top-level `class TreeNode` alongside "
+        "`class Solution`). `Main.java` USES that type (as a field type, parameter, "
+        "local, return) but MUST NOT re-declare it — both files compile together, so "
+        "declaring `class TreeNode` in Main.java too is a fatal `duplicate class: "
+        "TreeNode` error that stops every test case from running."
     ),
 }
 
@@ -775,7 +793,13 @@ Produce:
   - a canonical function name and, for EACH language, the exact signature the
     user's solution must have (idiomatic: a `class Solution` method for Java; a
     top-level function for Python/JavaScript; a free function or `class Solution`
-    for C++),
+    for C++). If the solution returns or takes a HELPER TYPE (a tree/list/graph
+    node such as `TreeNode` / `ListNode` / `Node`), say so in the signature and
+    make the stdin_format / output_format describe how that structure is
+    SERIALISED on stdin and stdout (e.g. level-order with `null` for absent tree
+    nodes) so the driver can build the input and serialise the user's returned
+    object deterministically. The helper type itself is declared by the SOLUTION,
+    not the driver — keep its fields standard (`val`, `left`, `right`, etc.),
   - test_inputs in that EXACT stdin format. Because there is no separate coverage
     pass, YOU must make these complete on your own. Tag each input with a `kind`
     and cover ALL FOUR kinds:
@@ -913,6 +937,16 @@ def ml_transformer_system(language: str, category: str = "") -> str:
 RULES:
   - Follow the shared stdin_format / output_format from the spec EXACTLY.
   - Call the user's solution via the given signature; never redefine it.
+  - AUXILIARY TYPES (tree / list / graph nodes) — DO NOT RE-DECLARE THEM. If the
+    signature returns or takes a helper type such as `TreeNode`, `ListNode` or
+    `Node`, that type is declared ONCE, by the SOLUTION (see the calling contract
+    above). Your driver REFERENCES the type (to traverse / validate / serialise the
+    user's returned object) but MUST NOT declare its own copy. In Java a duplicate
+    `class TreeNode` in `Main.java` is a fatal `duplicate class` compile error (no
+    test case can run); in C++ it is a `redefinition`; in Python/JS a second
+    definition shadows the solution's and breaks `isinstance` / field access. Assume
+    the helper type already exists with the standard fields (e.g. `TreeNode` has
+    `int val; TreeNode left, right;`) exactly as the LeetCode-style prompt provides it.
   - READ INPUT DEFENSIVELY — never crash on a contract-valid input, ESPECIALLY the
     EMPTY / minimal case. The input may be an empty line or have fewer tokens than a
     typical case; reading past the end must yield the EMPTY case, not throw. Then
@@ -1089,6 +1123,16 @@ REQUIREMENTS:
         submission collides with the driver and fails to compile/run.
       * It MUST match the given signature exactly and compile cleanly.
       * Java only: a NON-public `class Solution` (never `public class`, never Main).
+  - AUXILIARY TYPES: if the signature uses a helper type (`TreeNode`, `ListNode`,
+    `Node`, ...), DECLARE that type inside EVERY submission, once, alongside the
+    solution (the driver does NOT declare it — it only uses it, and each submission
+    is compiled separately WITH the driver, so each must carry the type). Use the
+    standard shape: Java a non-public `class TreeNode { int val; TreeNode left,
+    right; TreeNode(int v){ val = v; } }`, C++ `struct TreeNode { int val; TreeNode
+    *left, *right; TreeNode(int v): val(v), left(0), right(0) {} };`, Python a
+    `class TreeNode:` with `val/left/right`, JS `class TreeNode { ... }`. Keep the
+    field names identical across submissions so the driver can traverse whichever
+    submission it is compiled with.
   - Shape your submissions like this (function body varies):
 """ + _BARE_SOLUTION_TEMPLATE[language] + """
   - Provide >= 2 (ideally 3) EQUIVALENT submissions, each a genuinely DIFFERENT

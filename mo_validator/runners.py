@@ -183,7 +183,10 @@ class JavaRunner(Runner):
 
     def combined_program(self, driver_src: str, solution_src: str) -> str:
         # Two compilation units (Main + Solution). The driver (Main) holds the
-        # `public static void main`. Show both, clearly delimited.
+        # `public static void main`. Show both, clearly delimited. Dedupe shared
+        # auxiliary types (e.g. TreeNode) so the displayed program is exactly the
+        # one that compiles — the solution owns them, the driver just uses them.
+        driver_src = _dedup_java_types(driver_src, solution_src)
         return (
             "// ===== Main.java (driver — contains `public static void main`) =====\n"
             + driver_src.strip()
@@ -196,6 +199,11 @@ class JavaRunner(Runner):
         jdk = find_jdk()
         if jdk is None:
             return CompileResult(False, "no JDK found")
+        # Main.java and Solution.java are compiled together, so a helper type
+        # (TreeNode / ListNode / Node) declared in BOTH is a fatal `duplicate
+        # class` error. The solution's copy is authoritative (its signature uses
+        # the type), so strip the driver's duplicate before compiling.
+        driver_src = _dedup_java_types(driver_src, solution_src)
         (workdir / "Main.java").write_text(driver_src, encoding="utf-8")
         (workdir / "Solution.java").write_text(solution_src, encoding="utf-8")
         try:
@@ -317,6 +325,166 @@ def _strip_cpp_entry_point(src: str) -> str:
                 return (src[:m.start()].rstrip() + "\n" + src[j + 1:].lstrip()).strip() + "\n"
         j += 1
     return src  # unbalanced; leave untouched
+
+
+_JAVA_TYPE_KEYWORDS = ("class", "interface", "enum", "record")
+_JAVA_LEADING_MODIFIERS = (
+    "public", "private", "protected", "abstract", "final",
+    "sealed", "non-sealed", "strictfp", "static",
+)
+
+
+def _match_java_brace(src: str, open_idx: int) -> int:
+    """Return the index just past the `}` matching the `{` at ``open_idx``.
+
+    Braces inside line/block comments, string literals, text blocks and char
+    literals are ignored. Returns -1 if the brace is unbalanced.
+    """
+    n, j, depth = len(src), open_idx, 0
+    while j < n:
+        c = src[j]
+        if c == "/" and j + 1 < n and src[j + 1] == "/":           # line comment
+            nl = src.find("\n", j)
+            j = n if nl == -1 else nl
+            continue
+        if c == "/" and j + 1 < n and src[j + 1] == "*":           # block comment
+            end = src.find("*/", j + 2)
+            j = n if end == -1 else end + 2
+            continue
+        if c == '"' and src[j:j + 3] == '"""':                     # text block
+            end = src.find('"""', j + 3)
+            j = n if end == -1 else end + 3
+            continue
+        if c in "\"'":                                             # string / char literal
+            quote, j = c, j + 1
+            while j < n:
+                if src[j] == "\\":
+                    j += 2
+                    continue
+                if src[j] == quote:
+                    j += 1
+                    break
+                j += 1
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return j + 1
+        j += 1
+    return -1
+
+
+def _scan_java_types(src: str) -> list[tuple[int, str, int]]:
+    """Yield ``(decl_start, name, end)`` for every TOP-LEVEL type declaration.
+
+    ``decl_start`` includes any leading modifiers (``public``/``final``/...);
+    ``end`` is just past the closing brace of the type body. Nested types are
+    skipped (only declarations at brace depth 0 are reported). Comments and string
+    literals are ignored so braces/keywords inside them never trip the scan.
+    """
+    n, i, depth = len(src), 0, 0
+    out: list[tuple[int, str, int]] = []
+    while i < n:
+        c = src[i]
+        if c == "/" and i + 1 < n and src[i + 1] == "/":
+            nl = src.find("\n", i)
+            i = n if nl == -1 else nl
+            continue
+        if c == "/" and i + 1 < n and src[i + 1] == "*":
+            end = src.find("*/", i + 2)
+            i = n if end == -1 else end + 2
+            continue
+        if c == '"' and src[i:i + 3] == '"""':
+            end = src.find('"""', i + 3)
+            i = n if end == -1 else end + 3
+            continue
+        if c in "\"'":
+            quote, i = c, i + 1
+            while i < n:
+                if src[i] == "\\":
+                    i += 2
+                    continue
+                if src[i] == quote:
+                    i += 1
+                    break
+                i += 1
+            continue
+        if c == "{":
+            depth += 1
+            i += 1
+            continue
+        if c == "}":
+            depth -= 1
+            i += 1
+            continue
+        if depth == 0 and (c.isalpha() or c == "_"):
+            j = i
+            while j < n and (src[j].isalnum() or src[j] == "_"):
+                j += 1
+            word = src[i:j]
+            if word in _JAVA_TYPE_KEYWORDS:
+                k = j
+                while k < n and src[k].isspace():
+                    k += 1
+                m = k
+                while m < n and (src[m].isalnum() or src[m] == "_"):
+                    m += 1
+                name = src[k:m]
+                brace = src.find("{", m)
+                if name and brace != -1:
+                    end = _match_java_brace(src, brace)
+                    if end != -1:
+                        out.append((_java_decl_start(src, i), name, end))
+                        i = end
+                        continue
+            i = j
+            continue
+        i += 1
+    return out
+
+
+def _java_decl_start(src: str, kw_start: int) -> int:
+    """Walk back from a type keyword over leading modifiers to the declaration start."""
+    start = kw_start
+    while True:
+        j = start
+        while j > 0 and src[j - 1] in " \t":
+            j -= 1
+        word_end = j
+        while j > 0 and (src[j - 1].isalnum() or src[j - 1] in "_-"):
+            j -= 1
+        if j < word_end and src[j:word_end] in _JAVA_LEADING_MODIFIERS:
+            start = j
+        else:
+            return start
+
+
+def _dedup_java_types(driver_src: str, solution_src: str) -> str:
+    """Remove from the DRIVER any top-level type also declared by the SOLUTION.
+
+    ``Main.java`` and ``Solution.java`` are compiled together, so an auxiliary
+    type (``TreeNode`` / ``ListNode`` / ``Node`` ...) declared in BOTH fails with
+    `duplicate class`. The solution's copy is authoritative — its method signature
+    references the type, and for the other languages the solution is concatenated
+    above the driver — so the driver's duplicate is the one we strip. Only types
+    present in BOTH files are removed, so a type only the driver defines is kept.
+    """
+    sol_types = {name for _, name, _ in _scan_java_types(solution_src)
+                 if name not in ("Main", "Solution")}
+    if not sol_types:
+        return driver_src
+    spans = [(start, end) for start, name, end in _scan_java_types(driver_src)
+             if name in sol_types]
+    if not spans:
+        return driver_src
+    out = driver_src
+    for start, end in sorted(spans, reverse=True):
+        out = out[:start] + out[end:]
+    # Collapse the blank-line gap left where the type used to be.
+    import re
+    return re.sub(r"\n[ \t]*\n[ \t]*\n+", "\n\n", out)
 
 
 _RUNNERS: dict[str, Runner] = {
